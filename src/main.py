@@ -97,19 +97,14 @@ async def prompt(request: PromptRequest):
 
     def generate_response():
         try:
-            response = document_service.query_pipeline(request.query)
-            # logger.info(f"Query processed successfully")
-
-            response_gen = getattr(response, "response_gen", None)
-            # print(list(response_gen or []))
-            if response_gen is not None:
-                for token in response_gen:
-                    yield f"data: {token}\n\n"
-            else:
-                yield f"data: {str(response)}\n\n"
-
+            token_stream = document_service.query_pipeline(request.query)
+            # print(list(token_stream))
+            for token in token_stream:
+                yield f"data: {token}\n\n"
         except Exception as e:
             logger.error(f"Error processing query: {e}")
             yield f"data: Error: {str(e)}\n\n"
 
-    return StreamingResponse(generate_response(), media_type="text/plain")
+        logger.info(f"Query processed successfully")
+
+    return StreamingResponse(generate_response(), media_type="text/event-stream")

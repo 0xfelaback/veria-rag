@@ -20,6 +20,8 @@ from llama_index.core.base.response.schema import (
     StreamingResponse,
 )
 from llama_index.core.vector_stores.types import VectorStoreQueryMode
+from llama_index.core.prompts import PromptTemplate
+from src.Infrastructure.llm.index import local_llm, prompt_text
 
 md = MarkItDown()
 md_parser = MarkdownNodeParser()
@@ -34,6 +36,7 @@ pipeline = IngestionPipeline(
 query_engine = index.as_query_engine(
     streaming=True, similarity_top_k=5, response_synthesizer=response_synthesizer
 )
+retriever = index.as_retriever(similarity_top_k=5)
 
 
 class DocumentService:
@@ -128,26 +131,26 @@ class DocumentService:
                 response.close()
                 response.release_conn()
 
-    def query_pipeline(self, prompt: str) -> RESPONSE_TYPE:
-        """Query the document index using Elasticsearch and Llama-8B."""
-        # try:
-        logger.info(f"Querying with prompt: {prompt}")
-        response = query_engine.query(prompt)
-        logger.info(f"Query response generated successfully")
-        print(type(response))
+    def query_pipeline(self, prompt: str):
+        try:
+            logger.info(f"Querying index manually for prompt: {prompt}")
 
-        return response
+            nodes = retriever.retrieve(prompt)
 
-        """except Exception as e:
+            context_str = "\n\n".join([node.get_content() for node in nodes])
+            grounded_prompt_template = PromptTemplate(
+                "{system_instructions}\n\nContext: {context}\n\nQuery: {query}"
+            )
+            token_stream = local_llm.stream(
+                grounded_prompt_template,
+                system_instructions=getattr(local_llm, "prompt_key", prompt_text),
+                context=context_str,
+                query=prompt,
+            )
+
+            logger.info(f"Token stream initialized successfully")
+            return token_stream
+
+        except Exception as e:
             logger.error(f"Error in query_pipeline: {e}")
-            raise"""
-
-    """@staticmethod
-    def stream_response(response: RESPONSE_TYPE):
-        if isinstance(response, StreamingResponse):
-            for token in response.response_gen:
-                yield token
-        else:
-            raise TypeError(
-                "Unknown response type: The other 3 are also not included for now."
-            )"""
+            raise
