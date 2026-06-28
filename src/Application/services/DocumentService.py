@@ -7,13 +7,21 @@ from src.Infrastructure.dbcontext.context import settings
 from src.Infrastructure.minio.index import minio_client
 from src.Infrastructure.embedding_model.index import local_embed_model
 from src.Infrastructure.llm.index import local_llm
-from src.Infrastructure.elastic_search.index import create_elasticsearch_index
+from src.Infrastructure.elastic_search.index import (
+    create_elasticsearch_index,
+    index,
+)
 from markitdown import MarkItDown
 from loguru import logger
-from llama_index.core import Document, VectorStoreIndex, StorageContext
+from llama_index.core import Document, VectorStoreIndex
 from llama_index.core.node_parser import MarkdownNodeParser, SentenceSplitter
 from llama_index.core.ingestion import IngestionPipeline
-from llama_index.vector_stores.elasticsearch import ElasticsearchStore
+from llama_index.core.base.response.schema import (
+    RESPONSE_TYPE,
+    Response,
+    AsyncStreamingResponse,
+)
+from llama_index.core.vector_stores.types import VectorStoreQueryMode
 
 md = MarkItDown()
 md_parser = MarkdownNodeParser()
@@ -122,33 +130,32 @@ class DocumentService:
                 response.close()
                 response.release_conn()
 
-    async def query_pipeline(self, prompt: str) -> str:
+    async def query_pipeline(self, prompt: str) -> RESPONSE_TYPE:
         """Query the document index using Elasticsearch and Llama-8B."""
         try:
             logger.info(f"Querying with prompt: {prompt}")
 
-            vector_store = ElasticsearchStore(
-                es_url=settings.ELASTIC_URL,
-                index_name=settings.ES_INDEX_NAME,
-                es_user=settings.ELASTIC_USERNAME,
-                es_password=settings.ELASTIC_PASSWORD,
+            query_engine = index.as_query_engine(
+                streaming=True,
+                similarity_top_k=5,
+                llm=local_llm,
+                # vector_store_query_mode=VectorStoreQueryMode.HYBRID, paid feature
             )
-
-            storage_context = StorageContext.from_defaults(vector_store=vector_store)
-
-            index = VectorStoreIndex.from_vector_store(
-                vector_store=vector_store,
-                storage_context=storage_context,
-                embed_model=local_embed_model,
-            )
-
-            query_engine = index.as_query_engine(streaming=False, similarity_top_k=5)
-
             response = await query_engine.aquery(prompt)
             logger.info(f"Query response generated successfully")
 
-            return str(response)
+            return response
 
         except Exception as e:
             logger.error(f"Error in query_pipeline: {e}")
             raise
+
+    @staticmethod
+    async def stream_response(response: RESPONSE_TYPE):
+        if isinstance(response, AsyncStreamingResponse):
+            async for token in response.async_response_gen():
+                yield token
+        elif isinstance(response, Response):
+            yield response.response
+        else:
+            raise TypeError("Unknown response type")

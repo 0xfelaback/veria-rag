@@ -4,13 +4,13 @@ from contextlib import asynccontextmanager
 import datetime
 from io import BytesIO
 from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from minio import S3Error
 from src.Application.services.DocumentService import DocumentService
 from src.Infrastructure.minio.index import minio_client
 from src.Infrastructure.dbcontext.context import settings
 from loguru import logger
-import asyncio
 
 current_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 log_filename = f"logs/{current_time}-log-veria.log"
@@ -94,10 +94,16 @@ async def upload_pdf(file: UploadFile = File(...)):
 async def prompt(request: PromptRequest):
     logger.info(f"Prompt endpoint called with query: {request.query}")
     document_service = DocumentService()
-    try:
-        response = await document_service.query_pipeline(request.query)
-        logger.info(f"Query processed successfully")
-        return {"response": response}
-    except Exception as e:
-        logger.error(f"Error processing query: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+
+    async def generate_response():
+        try:
+            response = await document_service.query_pipeline(request.query)
+            logger.info(f"Query processed successfully")
+            async for chunk in document_service.stream_response(response=response):
+                yield f"data: {chunk}\n\n"
+
+        except Exception as e:
+            logger.error(f"Error processing query: {e}")
+            yield f"data: Error: {str(e)}\n\n"
+
+    return StreamingResponse(generate_response(), media_type="text/event-stream")
