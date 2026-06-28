@@ -17,6 +17,7 @@ dependencies = [
     "llama-index-vector-stores-elasticsearch (>=0.6.0,<0.7.0)",
     "llama-index-llms-ollama (>=0.10.1,<0.11.0)",
     "pipecat-ai[local,ollama,openai,silero] (>=1.4.0,<2.0.0)",
+    "llama-index-core (>=0.14.23,<0.15.0)",
 ]
 
 

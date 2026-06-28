@@ -6,20 +6,18 @@ from io import BytesIO
 from src.Infrastructure.dbcontext.context import settings
 from src.Infrastructure.minio.index import minio_client
 from src.Infrastructure.embedding_model.index import local_embed_model
-from src.Infrastructure.llm.index import local_llm
+from src.Infrastructure.llm.index import response_synthesizer
 from src.Infrastructure.elastic_search.index import (
-    create_elasticsearch_index,
     index,
 )
 from markitdown import MarkItDown
 from loguru import logger
-from llama_index.core import Document, VectorStoreIndex
+from llama_index.core import Document
 from llama_index.core.node_parser import MarkdownNodeParser, SentenceSplitter
 from llama_index.core.ingestion import IngestionPipeline
 from llama_index.core.base.response.schema import (
     RESPONSE_TYPE,
-    Response,
-    AsyncStreamingResponse,
+    StreamingResponse,
 )
 from llama_index.core.vector_stores.types import VectorStoreQueryMode
 
@@ -31,6 +29,10 @@ sentence_splitter = SentenceSplitter(
 )
 pipeline = IngestionPipeline(
     transformations=[md_parser, sentence_splitter, local_embed_model]
+)
+
+query_engine = index.as_query_engine(
+    streaming=True, similarity_top_k=5, response_synthesizer=response_synthesizer
 )
 
 
@@ -47,7 +49,6 @@ class DocumentService:
     ) -> bool | S3Error:
         try:
             object_name = filename if filename is not None else "document"
-
             logger.info(f"Checking if file already exists in MinIO: {object_name}")
             try:
                 minio_client.stat_object(
@@ -104,9 +105,12 @@ class DocumentService:
                     "classification": "open-source documnets",
                 },
             )
+            logger.info(f"Creating embeddings for: {filename}")
             nodes = pipeline.run(documents=[doc], include_metadata=True)
+            logger.info(
+                f"Embeddings successfully created and stored in Elasticsearch for: {filename}"
+            )
 
-            # Inspect nodes
             logger.info(f"Document parsed successfully: {filename}")
             logger.info(f"Total nodes extracted: {len(nodes)}")
 
@@ -115,12 +119,6 @@ class DocumentService:
                 logger.info(f"  - Text preview: {node.get_content()[:200]}...")
                 logger.info(f"  - Metadata: {node.metadata}")
                 logger.info(f"  - Node ID: {node.node_id}")
-
-            logger.info(f"Storing embeddings in Elasticsearch for: {filename}")
-            index = create_elasticsearch_index(nodes)
-            logger.info(
-                f"Embeddings successfully stored in Elasticsearch for: {filename}"
-            )
         except S3Error as err:
             logger.error(
                 f"MinIO Error while parsing document: {filename}, error: {err}"
@@ -130,32 +128,26 @@ class DocumentService:
                 response.close()
                 response.release_conn()
 
-    async def query_pipeline(self, prompt: str) -> RESPONSE_TYPE:
+    def query_pipeline(self, prompt: str) -> RESPONSE_TYPE:
         """Query the document index using Elasticsearch and Llama-8B."""
-        try:
-            logger.info(f"Querying with prompt: {prompt}")
+        # try:
+        logger.info(f"Querying with prompt: {prompt}")
+        response = query_engine.query(prompt)
+        logger.info(f"Query response generated successfully")
+        print(type(response))
 
-            query_engine = index.as_query_engine(
-                streaming=True,
-                similarity_top_k=5,
-                llm=local_llm,
-                # vector_store_query_mode=VectorStoreQueryMode.HYBRID, paid feature
-            )
-            response = await query_engine.aquery(prompt)
-            logger.info(f"Query response generated successfully")
+        return response
 
-            return response
-
-        except Exception as e:
+        """except Exception as e:
             logger.error(f"Error in query_pipeline: {e}")
-            raise
+            raise"""
 
-    @staticmethod
-    async def stream_response(response: RESPONSE_TYPE):
-        if isinstance(response, AsyncStreamingResponse):
-            async for token in response.async_response_gen():
+    """@staticmethod
+    def stream_response(response: RESPONSE_TYPE):
+        if isinstance(response, StreamingResponse):
+            for token in response.response_gen:
                 yield token
-        elif isinstance(response, Response):
-            yield response.response
         else:
-            raise TypeError("Unknown response type")
+            raise TypeError(
+                "Unknown response type: The other 3 are also not included for now."
+            )"""

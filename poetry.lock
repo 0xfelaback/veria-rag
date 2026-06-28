@@ -1831,14 +1831,14 @@ nltk = ">=3.9.3"
 
 [[package]]
 name = "llama-index-core"
-version = "0.14.22"
+version = "0.14.23"
 description = "Interface between LLMs and your data"
 optional = false
 python-versions = "<4.0,>=3.10"
 groups = ["main"]
 files = [
-    {file = "llama_index_core-0.14.22-py3-none-any.whl", hash = "sha256:9cfffde46fd5b7937101e1c0c9bb5c21bd7ff8c8a56937810b87ba3542f31225"},
-    {file = "llama_index_core-0.14.22.tar.gz", hash = "sha256:1384410f89bdbd32349aab444ef4f5c828c338787bc65bd1ffd8e86dfb44ac41"},
+    {file = "llama_index_core-0.14.23-py3-none-any.whl", hash = "sha256:6a54d267826732a8507f81df40785b107f7592af20f451a39a59005147caf84c"},
+    {file = "llama_index_core-0.14.23.tar.gz", hash = "sha256:c4baf2f2ab4f84e95090fe7941e0c87d6c514304f7bd2a749b8fa22164c1822b"},
 ]
 
 [package.dependencies]
@@ -5323,4 +5323,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = "<4.0,>=3.11"
-content-hash = "4f2f4125af68cfc2a0768c8fe571a19b7819f9d1331aeb7b4b21b9e6ea70362a"
+content-hash = "8bb1c214e072097ebcd3935e615b95e9ceb06c3704cd5e882483298f0e20ee7d"

@@ -95,15 +95,21 @@ async def prompt(request: PromptRequest):
     logger.info(f"Prompt endpoint called with query: {request.query}")
     document_service = DocumentService()
 
-    async def generate_response():
+    def generate_response():
         try:
-            response = await document_service.query_pipeline(request.query)
-            logger.info(f"Query processed successfully")
-            async for chunk in document_service.stream_response(response=response):
-                yield f"data: {chunk}\n\n"
+            response = document_service.query_pipeline(request.query)
+            # logger.info(f"Query processed successfully")
+
+            response_gen = getattr(response, "response_gen", None)
+            # print(list(response_gen or []))
+            if response_gen is not None:
+                for token in response_gen:
+                    yield f"data: {token}\n\n"
+            else:
+                yield f"data: {str(response)}\n\n"
 
         except Exception as e:
             logger.error(f"Error processing query: {e}")
             yield f"data: Error: {str(e)}\n\n"
 
-    return StreamingResponse(generate_response(), media_type="text/event-stream")
+    return StreamingResponse(generate_response(), media_type="text/plain")
