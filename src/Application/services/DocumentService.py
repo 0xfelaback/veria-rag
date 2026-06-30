@@ -34,7 +34,10 @@ pipeline = IngestionPipeline(
 )
 
 query_engine = index.as_query_engine(
-    streaming=True, similarity_top_k=5, response_synthesizer=response_synthesizer
+    streaming=True,
+    similarity_top_k=5,
+    response_synthesizer=response_synthesizer,
+    llm=local_llm,
 )
 retriever = index.as_retriever(similarity_top_k=5)
 

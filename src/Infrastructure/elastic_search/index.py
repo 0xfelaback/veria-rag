@@ -7,6 +7,7 @@ from llama_index.vector_stores.elasticsearch import (
 from llama_index.core.schema import BaseNode
 from src.Infrastructure.dbcontext.context import settings
 from src.Infrastructure.llm.index import local_llm
+from src.Infrastructure.embedding_model.index import local_embed_model
 
 vector_store = ElasticsearchStore(
     es_url=settings.ELASTIC_URL,
@@ -21,4 +22,5 @@ index = VectorStoreIndex.from_vector_store(
     vector_store=vector_store,
     storage_context=storage_context,
     llm=local_llm,
+    embed_model=local_embed_model,
 )

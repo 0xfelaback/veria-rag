@@ -17,7 +17,7 @@ local_llm = Ollama(
     model="llama3.1:8b-instruct-q4_K_M",
     prompt_key=prompt_temp,
     request_timeout=300.0,
-    context_window=8000,
+    context_window=4096,
     temperature=0.1,
     streaming=True,
 )
@@ -26,11 +26,12 @@ response_synthesizer = get_response_synthesizer(
     response_mode=ResponseMode.COMPACT,
     streaming=True,
 )
-"""
+
 from pipecat.services.ollama.llm import OLLamaLLMService
+
 llm_pipecat = OLLamaLLMService(
     base_url="http://localhost:11434/v1",
     settings=OLLamaLLMService.Settings(model="llama3.1:8b-instruct-q4_K_M"),
-)"""
+)
 
 Settings.llm = local_llm
