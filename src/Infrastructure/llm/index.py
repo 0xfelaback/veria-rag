@@ -2,6 +2,7 @@ from llama_index.llms.ollama import Ollama
 from llama_index.core import Settings
 from llama_index.core import get_response_synthesizer
 from llama_index.core.response_synthesizers import ResponseMode
+from src.Infrastructure.dbcontext.context import settings
 
 prompt_text = """You are an ultra-fast, precise Blockchain Technical Assistant.
             Your sole task is to extract the exact technical answer from the first relevant section found in the provided context.
@@ -14,7 +15,7 @@ prompt_text = """You are an ultra-fast, precise Blockchain Technical Assistant.
 prompt_temp = "Please I need immediate answers, concise & immediate, no more than a sentence. Form an answer out of the first bit of context data you grab"
 
 local_llm = Ollama(
-    model="llama3.1:8b-instruct-q4_K_M",
+    model=settings.OLLAMA_LLM_MODEL,
     prompt_key=prompt_temp,
     request_timeout=300.0,
     context_window=4096,
@@ -30,8 +31,13 @@ response_synthesizer = get_response_synthesizer(
 from pipecat.services.ollama.llm import OLLamaLLMService
 
 llm_pipecat = OLLamaLLMService(
-    base_url="http://localhost:11434/v1",
-    settings=OLLamaLLMService.Settings(model="llama3.1:8b-instruct-q4_K_M"),
+    base_url=f"{settings.OLLAMA_BASE_URL}/v1",
+    settings=OLLamaLLMService.Settings(
+        model=settings.OLLAMA_LLM_MODEL,
+        # max_tokens=64,
+        max_completion_tokens=64,
+    ),
+    extra_body={"options": {"num_ctx": 2048}},
 )
 
 Settings.llm = local_llm

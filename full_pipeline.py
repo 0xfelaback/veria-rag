@@ -382,7 +382,8 @@ async def main():
         base_url="http://127.0.0.1:8080/v1",
         settings=OpenAISTTService.Settings(
             model="whisper-1",
-            prompt="This is a conversation with Vicky, an automation engineer at Sterling Bank.",
+            # prompt="This is a conversation with Vicky, an automation engineer at Sterling Bank.",
+            prompt="This is a conversation with a blockchain wizard.",
         ),
     )
     """llm = OLLamaLLMService(
@@ -419,7 +420,7 @@ async def main():
         enable_auto_context_summarization=True,
         auto_context_summarization_config=LLMAutoContextSummarizationConfig(
             max_context_tokens=1600,
-            max_unsummarized_messages=6,
+            max_unsummarized_messages=20,
         ),
     )
 
