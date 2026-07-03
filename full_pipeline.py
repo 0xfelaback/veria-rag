@@ -26,15 +26,24 @@ from pipecat.frames.frames import (
     BotStartedSpeakingFrame,
     UserStartedSpeakingFrame,
     InterruptionFrame,
+    UserStoppedSpeakingFrame,
     VADUserStartedSpeakingFrame,
+    FunctionCallsStartedFrame,
+    FunctionCallResultFrame,
+    FunctionCallCancelFrame,
+    VADUserStoppedSpeakingFrame,
+    BotStoppedSpeakingFrame,
 )
 from pipecat.services.ollama.llm import OLLamaLLMService
 from pipecat.processors.aggregators.llm_response_universal import (
     LLMContextAggregatorPair,
+    LLMAssistantAggregatorParams,
+)
+from pipecat.utils.context.llm_context_summarization import (
+    LLMAutoContextSummarizationConfig,
 )
 from pipecat.processors.frame_processor import FrameProcessor
 from pipecat.processors.aggregators.llm_context import LLMContext
-from pipecat.frames.frames import BotStoppedSpeakingFrame
 import datetime
 from loguru import logger as loggerr
 from src.Infrastructure.llm.index import llm_pipecat
@@ -52,8 +61,8 @@ loggerr.add(
 )
 
 
-prompt_text = "You are a charming and brilliant blockchain solutions architect speaking over a voice call. Maintain a warm, playfully flirty, yet deeply professional tone—just like a supportive, high-performing coworker. Keep every response naturally conversational, strictly limited to 1 or 2 short sentences, and always end with a clear cue or question to pass the mic back to the user."
-min_prompt_text = "You are a helpful assistant."
+prompt_text = "You are Vicky, a blockchain architect. Be brief, conversational, 1-2 sentences max. Always end with a question."
+min_prompt_text = "You are a helpful assistant. Keep responses to 1-3 sentences max.."
 
 
 class LatencyBenchmarkProcessor(FrameProcessor):
@@ -76,14 +85,225 @@ class LatencyBenchmarkProcessor(FrameProcessor):
         await self.push_frame(frame, direction)
 
 
+class PipelineTimingProcessor(FrameProcessor):
+    """Comprehensive timing processor to measure pipeline latency metrics."""
+
+    def __init__(self):
+        super().__init__()
+        self.vad_stop_time = None
+        self.user_stop_detected_time = None
+
+        self.vad_stop_to_transcription_start = None
+        self.transcription_complete_time = None
+
+        self.function_call_start_time = None
+        self.function_call_complete_time = None
+
+        self.llm_start_time = None
+        self.llm_first_token_time = None
+        self.llm_complete_time = None
+        self.llm_text_frame_count = 0
+
+        self.tts_start_time = None
+        self.tts_first_audio_time = None
+        self.bot_started_speaking_time = None
+
+        self.user_stop_to_bot_start_logged = False
+        self.user_stop_to_bot_stop_logged = False
+
+    async def process_frame(self, frame, direction):
+        await super().process_frame(frame, direction)
+        current_time = time.perf_counter()
+
+        if isinstance(frame, VADUserStoppedSpeakingFrame):
+            self.vad_stop_time = current_time
+            loggerr.debug("[TIMING] VAD detected user stopped speaking")
+
+        if isinstance(frame, UserStoppedSpeakingFrame):
+            self.user_stop_detected_time = current_time
+            self.user_stop_to_bot_start_logged = False
+            self.user_stop_to_bot_stop_logged = False
+            if self.vad_stop_time:
+                vad_to_detection = (
+                    self.user_stop_detected_time - self.vad_stop_time
+                ) * 1000
+                loggerr.info(
+                    f"[TIMING] VAD stop to UserStoppedSpeaking: {vad_to_detection:.2f}ms"
+                )
+                self.vad_stop_time = None
+
+        if isinstance(frame, VADUserStoppedSpeakingFrame):
+            self.vad_stop_to_transcription_start = current_time
+
+        if isinstance(frame, TranscriptionFrame):
+            if getattr(frame, "final", False):
+                self.transcription_complete_time = current_time
+                if self.vad_stop_to_transcription_start:
+                    vad_to_transcription = (
+                        self.transcription_complete_time
+                        - self.vad_stop_to_transcription_start
+                    ) * 1000
+                    loggerr.info(
+                        f"[TIMING] VAD stop to Transcription complete: {vad_to_transcription:.2f}ms"
+                    )
+                    self.vad_stop_to_transcription_start = None
+
+        if isinstance(frame, FunctionCallsStartedFrame):
+            self.function_call_start_time = current_time
+            loggerr.debug("[TIMING] Function call started")
+
+        if isinstance(frame, FunctionCallResultFrame):
+            self.function_call_complete_time = current_time
+            if self.function_call_start_time:
+                rag_time = (
+                    self.function_call_complete_time - self.function_call_start_time
+                ) * 1000
+                loggerr.info(f"[TIMING] Function call execution time: {rag_time:.2f}ms")
+                self.function_call_start_time = None
+
+        if isinstance(frame, FunctionCallResultFrame):
+            self.llm_start_time = current_time
+            self.llm_text_frame_count = 0
+            loggerr.debug("[TIMING] LLM generation started")
+
+        if isinstance(frame, TextFrame) and hasattr(frame, "text") and frame.text:
+            self.llm_text_frame_count += 1
+            # Capture TTFT on first text frame
+            if self.llm_start_time and not self.llm_first_token_time:
+                self.llm_first_token_time = current_time
+                ttft = (self.llm_first_token_time - self.llm_start_time) * 1000
+                loggerr.info(f"[TIMING] LLM Time to First Token (TTFT): {ttft:.2f}ms")
+
+        if isinstance(frame, LLMFullResponseEndFrame):
+            self.llm_complete_time = current_time
+            if self.llm_start_time:
+                llm_generation_time = (
+                    self.llm_complete_time - self.llm_start_time
+                ) * 1000
+                loggerr.info(
+                    f"[TIMING] LLM total generation time: {llm_generation_time:.2f}ms"
+                )
+                if self.llm_first_token_time:
+                    generation_after_first = (
+                        self.llm_complete_time - self.llm_first_token_time
+                    ) * 1000
+                    loggerr.info(
+                        f"[TIMING] LLM generation after TTFT: {generation_after_first:.2f}ms"
+                    )
+                loggerr.info(
+                    f"[TIMING] LLM text frames generated: {self.llm_text_frame_count}"
+                )
+            # Reset LLM timing state
+            self.llm_start_time = None
+            self.llm_first_token_time = None
+            self.llm_complete_time = None
+            self.llm_text_frame_count = 0
+
+        # 5. TTS timing (text to audio)
+        if isinstance(frame, BotStartedSpeakingFrame):
+            self.bot_started_speaking_time = current_time
+            if self.llm_first_token_time:
+                text_to_audio = (
+                    self.bot_started_speaking_time - self.llm_first_token_time
+                ) * 1000
+                loggerr.info(
+                    f"[TIMING] LLM first token to bot speaking: {text_to_audio:.2f}ms"
+                )
+            if self.transcription_complete_time:
+                end_to_end = (
+                    self.bot_started_speaking_time - self.transcription_complete_time
+                ) * 1000
+                loggerr.info(
+                    f"[TIMING] End-to-end latency (transcription to audio): {end_to_end:.2f}ms"
+                )
+            if self.user_stop_detected_time and not self.user_stop_to_bot_start_logged:
+                user_stop_to_bot_start = (
+                    self.bot_started_speaking_time - self.user_stop_detected_time
+                ) * 1000
+                loggerr.info(
+                    f"[TIMING] UserStoppedSpeaking to BotStartedSpeaking: {user_stop_to_bot_start:.2f}ms"
+                )
+                self.user_stop_to_bot_start_logged = True
+
+        if isinstance(frame, BotStoppedSpeakingFrame):
+            if self.bot_started_speaking_time:
+                audio_duration = (current_time - self.bot_started_speaking_time) * 1000
+                loggerr.info(
+                    f"[TIMING] Audio playback duration: {audio_duration:.2f}ms"
+                )
+                self.bot_started_speaking_time = None
+            if self.user_stop_detected_time:
+                user_stop_to_bot_stop = (
+                    current_time - self.user_stop_detected_time
+                ) * 1000
+                loggerr.info(
+                    f"[TIMING] UserStoppedSpeaking to BotStoppedSpeaking: {user_stop_to_bot_stop:.2f}ms"
+                )
+
+        await self.push_frame(frame, direction)
+
+
+class LLMContextPruningProcessor(FrameProcessor):
+    """Trim old LLM context messages after each assistant turn."""
+
+    def __init__(self, context: LLMContext, max_recent_turns: int = 2):
+        super().__init__()
+        self.context = context
+        self.max_recent_turns = max_recent_turns
+
+    async def process_frame(self, frame, direction):
+        await super().process_frame(frame, direction)
+
+        if isinstance(frame, BotStoppedSpeakingFrame):
+            messages = self.context.messages
+            if len(messages) > 8:
+
+                def message_role(message):
+                    if isinstance(message, dict):
+                        return message.get("role")
+                    return getattr(message, "role", None)
+
+                system_messages = [
+                    msg for msg in messages if message_role(msg) == "system"
+                ]
+                non_system_messages = [
+                    msg for msg in messages if message_role(msg) != "system"
+                ]
+
+                kept_messages = []
+                user_count = 0
+                assistant_count = 0
+                for msg in reversed(non_system_messages):
+                    kept_messages.insert(0, msg)
+                    role = message_role(msg)
+                    if role == "user":
+                        user_count += 1
+                    elif role == "assistant":
+                        assistant_count += 1
+                    if (
+                        user_count >= self.max_recent_turns
+                        and assistant_count >= self.max_recent_turns
+                    ):
+                        break
+
+                pruned_messages = system_messages + kept_messages
+                self.context.set_messages(pruned_messages)
+                loggerr.debug(
+                    f"[CONTEXT] Pruned LLM history to last {self.max_recent_turns} turns."
+                )
+
+        await self.push_frame(frame, direction)
+
+
 class InterruptionCooldownProcessor(FrameProcessor):
-    """Blocks mic input while the bot is speaking and adds a brief cooldown after."""
+    """Blocks mic input while the bot is speaking, during function calls, and adds a brief cooldown after."""
 
     def __init__(self, post_speech_cooldown=0.8):
         super().__init__()
         self.post_speech_cooldown = post_speech_cooldown
         self.bot_is_speaking = False
         self.bot_stop_time = None
+        self.function_call_in_progress = False
 
     async def process_frame(self, frame, direction):
         await super().process_frame(frame, direction)
@@ -105,6 +325,18 @@ class InterruptionCooldownProcessor(FrameProcessor):
             await self.push_frame(frame, direction)
             return
 
+        if isinstance(frame, FunctionCallsStartedFrame):
+            self.function_call_in_progress = True
+            print("[STATE] Function call in progress. Mic input muted.")
+            await self.push_frame(frame, direction)
+            return
+
+        if isinstance(frame, (FunctionCallResultFrame, FunctionCallCancelFrame)):
+            self.function_call_in_progress = False
+            print("[STATE] Function call completed. Mic input enabled.")
+            await self.push_frame(frame, direction)
+            return
+
         # calculate if we are in the post-speech cooldown window
         in_cooldown_window = False
         if not self.bot_is_speaking and self.bot_stop_time:
@@ -113,7 +345,9 @@ class InterruptionCooldownProcessor(FrameProcessor):
             else:
                 self.bot_stop_time = None
 
-        if (self.bot_is_speaking or in_cooldown_window) and isinstance(
+        if (
+            self.bot_is_speaking or in_cooldown_window or self.function_call_in_progress
+        ) and isinstance(
             frame,
             (
                 UserStartedSpeakingFrame,
@@ -122,7 +356,12 @@ class InterruptionCooldownProcessor(FrameProcessor):
                 InputAudioRawFrame,
             ),
         ):
-            print("[AEC BLOCK] Echo or interruption blocked.")
+            block_reason = (
+                "bot speaking"
+                if self.bot_is_speaking
+                else "cooldown" if in_cooldown_window else "function call"
+            )
+            print(f"[AEC BLOCK] Echo or interruption blocked ({block_reason}).")
             return
 
         await self.push_frame(frame, direction)
@@ -146,19 +385,23 @@ async def main():
             prompt="This is a conversation with Vicky, an automation engineer at Sterling Bank.",
         ),
     )
-
-    llm = OLLamaLLMService(
+    """llm = OLLamaLLMService(
         base_url="http://localhost:11434/v1",
-        settings=OLLamaLLMService.Settings(model="llama3.2:3b"),
-    )
+        settings=OLLamaLLMService.Settings(
+            model="llama3.2:3b",
+            max_tokens=256,
+        ),
+        extra_body={"options": {"num_ctx": 2048}},
+    )"""
 
     tts = OpenAITTSService(
         api_key="not-needed",
         base_url="http://localhost:8880/v1",
         settings=OpenAITTSService.Settings(
-            # model="kokoro",
-            model="gpt-4o-mini-tts",
-            voice="ash",
+            model="kokoro",
+            # model="gpt-4o-mini-tts",
+            voice="alloy",
+            speed=1,
         ),
     )
 
@@ -171,8 +414,18 @@ async def main():
         ],
         tools=[query_function_call],
     )
+
+    assistant_params = LLMAssistantAggregatorParams(
+        enable_auto_context_summarization=True,
+        auto_context_summarization_config=LLMAutoContextSummarizationConfig(
+            max_context_tokens=1600,
+            max_unsummarized_messages=6,
+        ),
+    )
+
     user_aggregator, assistant_aggregator = LLMContextAggregatorPair(
         context=context,
+        assistant_params=assistant_params,
     )
 
     logger = FrameLogger(
@@ -190,6 +443,9 @@ async def main():
     # Create interruption cooldown processor
     interruption_cooldown = InterruptionCooldownProcessor()
 
+    timing_processor = PipelineTimingProcessor()
+    pruning_processor = LLMContextPruningProcessor(context=context, max_recent_turns=2)
+
     pipeline = Pipeline(
         [
             transport.input(),
@@ -197,6 +453,8 @@ async def main():
             VADProcessor(vad_analyzer=vad_analyzer),
             stt,
             logger,
+            timing_processor,
+            pruning_processor,
             user_aggregator,
             llm_pipecat,
             tts,
@@ -205,12 +463,20 @@ async def main():
         ]
     )
 
-    vad_params = SpeechControlParamsFrame(
+    """vad_params = SpeechControlParamsFrame(
         vad_params=VADParams(
             confidence=0.6,
             start_secs=0.2,
             min_volume=0.6,  # stop_secs=2.0,
             stop_secs=0.8,
+        )
+    )"""
+    vad_params = SpeechControlParamsFrame(
+        vad_params=VADParams(
+            confidence=0.5,
+            start_secs=0.1,
+            min_volume=0.5,
+            stop_secs=0.6,
         )
     )
 
@@ -225,6 +491,12 @@ async def main():
 
     print("[INFRA] Pre-warming embedding model...")
     await prewarm_embedding_model()
+
+    print("[INFRA] Pre-warming LLM with test prompt...")
+    await pipeline.queue_frame(
+        TranscriptionFrame(text="Hello", user_id="system", timestamp="now")
+    )
+    await asyncio.sleep(2)
 
     print("[INFRA] Pushing VAD configuration frame...")
     await pipeline.queue_frame(vad_params)

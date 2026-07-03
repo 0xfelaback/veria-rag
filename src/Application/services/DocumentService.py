@@ -38,6 +38,8 @@ query_engine = index.as_query_engine(
     similarity_top_k=5,
     response_synthesizer=response_synthesizer,
     llm=local_llm,
+    vector_store_kwargs={"num_candidates": 20},
+    search_kwargs={"num_candidates": 50},
 )
 retriever = index.as_retriever(similarity_top_k=5)
 
@@ -113,6 +115,15 @@ class DocumentService:
             )
             logger.info(f"Creating embeddings for: {filename}")
             nodes = pipeline.run(documents=[doc], include_metadata=True)
+
+            for node in nodes:
+                if node.embedding is None:
+                    node.embedding = local_embed_model.get_text_embedding(
+                        node.get_content()
+                    )
+
+            logger.info(f"Inserting {len(nodes)} nodes into Elasticsearch index")
+            index.insert_nodes(nodes)
             logger.info(
                 f"Embeddings successfully created and stored in Elasticsearch for: {filename}"
             )
