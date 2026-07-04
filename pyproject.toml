@@ -14,10 +14,10 @@ dependencies = [
     "loguru (>=0.7.3,<0.8.0)",
     "llama-index (>=0.14.22,<0.15.0)",
     "llama-index-embeddings-ollama (>=0.9.0,<0.10.0)",
-    "llama-index-vector-stores-elasticsearch (>=0.6.0,<0.7.0)",
     "llama-index-llms-ollama (>=0.10.1,<0.11.0)",
     "pipecat-ai[local,ollama,openai,silero] (>=1.4.0,<2.0.0)",
     "llama-index-core (>=0.14.23,<0.15.0)",
+    "llama-index-vector-stores-elasticsearch (>=0.6.0,<0.7.0)",
 ]
 
 

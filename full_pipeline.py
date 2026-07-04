@@ -61,8 +61,21 @@ loggerr.add(
 )
 
 
-prompt_text = "You are Vicky, a blockchain architect. Be brief, conversational, 1-2 sentences max. Always end with a question."
-min_prompt_text = "You are a helpful assistant. Keep responses to 1-3 sentences max.."
+prompt_text = (
+    "You are Vicky, a blockchain architect. Be brief and direct. Answer in one "
+    "short spoken sentence (<=15 words). NEVER use markdown, headings, or bullets. "
+    "Answer directly from the latest retrieved context and preserve the technical "
+    "meaning. Do not oversimplify or paraphrase away the core mechanism. If the "
+    "answer is not in the context, say 'Context is insufficient.'"
+)
+
+min_prompt_text = (
+    "You are a voice assistant. Your output must be spoken out loud. NEVER use "
+    "markdown headings or bullet points. Limit your answer to a single, direct "
+    "sentence under 15 words based strictly on the latest retrieved context. "
+    "Preserve the technical meaning and key mechanism. Do not oversimplify. If "
+    "the answer is not present, say 'Context is insufficient.'"
+)
 
 
 class LatencyBenchmarkProcessor(FrameProcessor):
@@ -286,10 +299,17 @@ class LLMContextPruningProcessor(FrameProcessor):
                     ):
                         break
 
-                pruned_messages = system_messages + kept_messages
+                # Keep only the original system prompt plus the latest RAG system message.
+                retained_system_messages = []
+                if system_messages:
+                    retained_system_messages.append(system_messages[0])
+                    if len(system_messages) > 1:
+                        retained_system_messages.append(system_messages[-1])
+
+                pruned_messages = retained_system_messages + kept_messages
                 self.context.set_messages(pruned_messages)
                 loggerr.debug(
-                    f"[CONTEXT] Pruned LLM history to last {self.max_recent_turns} turns."
+                    f"[CONTEXT] Pruned LLM history to last {self.max_recent_turns} turns and dropped older system messages."
                 )
 
         await self.push_frame(frame, direction)
@@ -382,8 +402,7 @@ async def main():
         base_url="http://127.0.0.1:8080/v1",
         settings=OpenAISTTService.Settings(
             model="whisper-1",
-            # prompt="This is a conversation with Vicky, an automation engineer at Sterling Bank.",
-            prompt="This is a conversation with a blockchain wizard.",
+            prompt="This is a conversation with a blockchain wizard on technical blockchain technology questions.",
         ),
     )
     """llm = OLLamaLLMService(
@@ -417,11 +436,7 @@ async def main():
     )
 
     assistant_params = LLMAssistantAggregatorParams(
-        enable_auto_context_summarization=True,
-        auto_context_summarization_config=LLMAutoContextSummarizationConfig(
-            max_context_tokens=1600,
-            max_unsummarized_messages=20,
-        ),
+        enable_auto_context_summarization=False,
     )
 
     user_aggregator, assistant_aggregator = LLMContextAggregatorPair(
