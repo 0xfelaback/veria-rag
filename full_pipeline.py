@@ -315,6 +315,41 @@ class LLMContextPruningProcessor(FrameProcessor):
         await self.push_frame(frame, direction)
 
 
+class ContextResetProcessor(FrameProcessor):
+    """Clears stale user/tool context when a new explicit user turn begins."""
+
+    def __init__(self, context: LLMContext):
+        super().__init__()
+        self.context = context
+
+    async def process_frame(self, frame, direction):
+        await super().process_frame(frame, direction)
+
+        if isinstance(
+            frame,
+            (
+                UserStartedSpeakingFrame,
+                VADUserStartedSpeakingFrame,
+                InterruptionFrame,
+            ),
+        ):
+            messages = self.context.messages
+
+            def message_role(message):
+                if isinstance(message, dict):
+                    return message.get("role")
+                return getattr(message, "role", None)
+
+            system_messages = [msg for msg in messages if message_role(msg) == "system"]
+            if system_messages:
+                self.context.set_messages([system_messages[0]])
+                loggerr.debug(
+                    "[CONTEXT] Cleared stale conversation history on new user turn."
+                )
+
+        await self.push_frame(frame, direction)
+
+
 class InterruptionCooldownProcessor(FrameProcessor):
     """Blocks mic input while the bot is speaking, during function calls, and adds a brief cooldown after."""
 
@@ -461,6 +496,7 @@ async def main():
 
     timing_processor = PipelineTimingProcessor()
     pruning_processor = LLMContextPruningProcessor(context=context, max_recent_turns=2)
+    context_reset_processor = ContextResetProcessor(context=context)
 
     pipeline = Pipeline(
         [
@@ -470,23 +506,15 @@ async def main():
             stt,
             logger,
             timing_processor,
-            pruning_processor,
             user_aggregator,
             llm_pipecat,
             tts,
             transport.output(),
             assistant_aggregator,
+            pruning_processor,
+            context_reset_processor,
         ]
     )
-
-    """vad_params = SpeechControlParamsFrame(
-        vad_params=VADParams(
-            confidence=0.6,
-            start_secs=0.2,
-            min_volume=0.6,  # stop_secs=2.0,
-            stop_secs=0.8,
-        )
-    )"""
     vad_params = SpeechControlParamsFrame(
         vad_params=VADParams(
             confidence=0.5,
