@@ -18,6 +18,7 @@ dependencies = [
     "pipecat-ai[local,ollama,openai,silero] (>=1.4.0,<2.0.0)",
     "llama-index-core (>=0.14.23,<0.15.0)",
     "llama-index-vector-stores-elasticsearch (>=0.6.0,<0.7.0)",
+    "pypdf (>=6.14.2,<7.0.0)",
 ]
 
 

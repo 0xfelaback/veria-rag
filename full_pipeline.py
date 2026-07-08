@@ -27,6 +27,7 @@ from pipecat.frames.frames import (
     UserStartedSpeakingFrame,
     InterruptionFrame,
     UserStoppedSpeakingFrame,
+    UserTurnInferenceCompletedFrame,
     VADUserStartedSpeakingFrame,
     FunctionCallsStartedFrame,
     FunctionCallResultFrame,
@@ -74,7 +75,9 @@ min_prompt_text = (
     "markdown headings or bullet points. Limit your answer to a single, direct "
     "sentence under 15 words based strictly on the latest retrieved context. "
     "Preserve the technical meaning and key mechanism. Do not oversimplify. If "
-    "the answer is not present, say 'Context is insufficient.'"
+    "the answer is not present, say 'Context is insufficient.' "
+    "IMPORTANT: Before answering, you MUST call the query_function_call tool "
+    "to retrieve relevant context from the knowledge base."
 )
 
 
@@ -488,6 +491,10 @@ async def main():
             OutputAudioRawFrame,
             TextFrame,
             LLMFullResponseEndFrame,
+            # temporary frames
+            # FunctionCallsStartedFrame,
+            # UserTurnInferenceCompletedFrame,
+            # VADUserStartedSpeakingFrame,
         ),
     )
 
@@ -518,9 +525,10 @@ async def main():
     vad_params = SpeechControlParamsFrame(
         vad_params=VADParams(
             confidence=0.5,
+            # confidence=0.8,  # for noisy environments
             start_secs=0.1,
             min_volume=0.5,
-            stop_secs=0.6,
+            stop_secs=1.8,
         )
     )
 
@@ -548,7 +556,10 @@ async def main():
     print("[INFRA] Pushing pre-warm frame to system pipeline cache...")
     await pipeline.queue_frame(
         TranscriptionFrame(
-            text="Pre-warm initialization test.", user_id="system", timestamp="now"
+            # text="Pre-warm initialization test.",
+            text="Hi, how are doing today.",
+            user_id="system",
+            timestamp="now",
         )
     )
 

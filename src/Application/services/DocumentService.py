@@ -1,4 +1,5 @@
 import datetime
+from enum import Enum
 import io
 from typing import Literal
 from minio.error import S3Error
@@ -15,11 +16,6 @@ from loguru import logger
 from llama_index.core import Document
 from llama_index.core.node_parser import MarkdownNodeParser, SentenceSplitter
 from llama_index.core.ingestion import IngestionPipeline
-from llama_index.core.base.response.schema import (
-    RESPONSE_TYPE,
-    StreamingResponse,
-)
-from llama_index.core.vector_stores.types import VectorStoreQueryMode
 from llama_index.core.prompts import PromptTemplate
 from src.Infrastructure.llm.index import local_llm, prompt_text
 
@@ -44,6 +40,12 @@ query_engine = index.as_query_engine(
 retriever = index.as_retriever(similarity_top_k=5)
 
 
+class FileType(Enum):
+    DOCX = "docx"
+    PDF = "pdf"
+    MD = "md"
+
+
 class DocumentService:
     def __init__(self):
         pass
@@ -53,14 +55,21 @@ class DocumentService:
         file_size: int,
         file_stream: BytesIO,
         filename: str | None,
-        file_content_type: Literal["application/pdf"],
+        file_content_type: str,
+        file_type: FileType | None,
     ) -> bool | S3Error:
         try:
             object_name = filename if filename is not None else "document"
             logger.info(f"Checking if file already exists in MinIO: {object_name}")
+            bucket_name = settings.MINIO_BUCKET_NAME
+            if file_type == FileType.MD:
+                bucket_name = settings.MINIO_BUCKET_NAME_MD
+            elif file_type == FileType.DOCX:
+                bucket_name = settings.MINIO_BUCKET_NAME_DOCX
+
             try:
                 minio_client.stat_object(
-                    bucket_name=settings.MINIO_BUCKET_NAME,
+                    bucket_name=bucket_name,
                     object_name=object_name,
                 )
                 logger.warning(f"File already exists in MinIO: {object_name}")
@@ -76,7 +85,7 @@ class DocumentService:
                 f"Storing file to MinIO: {object_name}, size: {file_size} bytes"
             )
             minio_client.put_object(
-                bucket_name=settings.MINIO_BUCKET_NAME,
+                bucket_name=bucket_name,
                 object_name=object_name,
                 data=file_stream,
                 length=file_size,
@@ -89,25 +98,39 @@ class DocumentService:
             logger.error(f"Failed to store file to MinIO: {filename}, error: {err}")
             return err
 
-    def parse_document(self, filename: str | None):
-        markdown_text = None
+    def parse_document(self, filename: str | None, file_type: FileType):
         response = None
+        markdown_text = None
         try:
             logger.info(f"Parsing document: {filename}")
+            bucket_name = settings.MINIO_BUCKET_NAME
+            if file_type == FileType.MD:
+                bucket_name = settings.MINIO_BUCKET_NAME_MD
+            elif file_type == FileType.DOCX:
+                bucket_name = settings.MINIO_BUCKET_NAME_DOCX
+
             response = minio_client.get_object(
-                bucket_name=settings.MINIO_BUCKET_NAME,
+                bucket_name,
                 object_name=filename if filename is not None else "document",
             )
-            pdf_bytes = response.read()
-            pdf_buffer = io.BytesIO(pdf_bytes)
-            result = md.convert(pdf_buffer, file_extension=".pdf")
-            markdown_text = result.markdown
+            if file_type == FileType.PDF:
+                pdf_bytes = response.read()
+                pdf_buffer = io.BytesIO(pdf_bytes)
+                result = md.convert(pdf_buffer, file_extension=".pdf")
+                markdown_text = result.markdown
+            elif file_type == FileType.MD:
+                markdown_text = response.read().decode("utf-8", errors="ignore")
+            elif file_type == FileType.DOCX:
+                docx_bytes = response.read()
+                docx_buffer = io.BytesIO(docx_bytes)
+                result = md.convert(docx_buffer, file_extension=".docx")
+                markdown_text = result.markdown
             doc = Document(
                 text=markdown_text,
                 metadata={
                     "filename": filename,
                     "author": "system",
-                    "category": "markdown",
+                    "category": file_type.value.lower(),
                     "parsed_at": datetime.datetime.now().isoformat(),
                     "domain": "electronic finance",
                     "classification": "open-source documnets",

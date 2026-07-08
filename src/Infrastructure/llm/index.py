@@ -34,7 +34,6 @@ llm_pipecat = OLLamaLLMService(
     base_url=f"{settings.OLLAMA_BASE_URL}/v1",
     settings=OLLamaLLMService.Settings(
         model=settings.OLLAMA_LLM_MODEL,
-        # max_tokens=64,
         max_completion_tokens=64,
     ),
     extra_body={"options": {"num_ctx": 2048}},

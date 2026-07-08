@@ -3,6 +3,7 @@ import asyncio
 from pipecat.services.llm_service import FunctionCallParams
 from src.Infrastructure.elastic_search.index import index
 from src.Infrastructure.embedding_model.index import local_embed_model
+from pipecat.adapters.schemas.direct_function import tool_options
 from loguru import logger
 
 _cached_retriever = None

@@ -4,6 +4,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     MINIO_BUCKET_NAME: str = Field(default=...)
+    MINIO_BUCKET_NAME_MD: str = Field(default=...)
+    MINIO_BUCKET_NAME_DOCX: str = Field(default=...)
     MINIO_SECRET_KEY: str = Field(default=...)
     MINIO_ACCESS_KEY: str = Field(default=...)
     MINIO_ENDPOINT: str = Field(default=...)
