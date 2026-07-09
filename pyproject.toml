@@ -11,6 +11,7 @@ dependencies = [
     "minio (>=7.2.20,<8.0.0)",
     "python-multipart (>=0.0.32,<0.0.33)",
     "markitdown[pdf] (>=0.1.6,<0.2.0)",
+    "markitdown[docx] (>=0.1.6,<0.2.0)",
     "loguru (>=0.7.3,<0.8.0)",
     "llama-index (>=0.14.22,<0.15.0)",
     "llama-index-embeddings-ollama (>=0.9.0,<0.10.0)",

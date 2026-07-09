@@ -71,15 +71,15 @@ prompt_text = (
 )
 
 min_prompt_text = (
-    "You are a voice assistant. Your output must be spoken out loud. NEVER use "
+    "You are a voice assistant. NOTE: ALWAYS KEEP YOUR RESPONSES BELOW 50 WORDS!. Your output must be spoken out loud. NEVER use "
     "markdown headings or bullet points. "
     "CRITICAL ROUTING RULE: If the user is greeting you, asking how you are, "
     "making small talk, or asking generic pleasantries, answer them directly "
-    "in a single conversational sentence and STOP. Do NOT call any tools for small talk. "
+    "in a friendly, conversational manner and STOP. Do NOT call any tools for small talk. "
     "FOR KNOWLEDGE QUERIES: You MUST call the query_function_call tool first to "
-    "retrieve context. Limit your final answer to a single, direct sentence under "
-    "15 words based strictly on the latest retrieved context. Preserve the technical "
-    "meaning and key mechanism. Do not oversimplify. If the answer is not present "
+    "retrieve context. Provide a descriptive, clear explanation based strictly on "
+    "the latest retrieved context. Keep it natural for speech, but preserve the informative "
+    "meaning and key insight without oversimplifying. If the answer is not present "
     "in the context, say 'Context is insufficient.'"
 )
 
@@ -521,8 +521,6 @@ async def main():
             tts,
             transport.output(),
             assistant_aggregator,
-            pruning_processor,
-            context_reset_processor,
         ]
     )
     vad_params = SpeechControlParamsFrame(

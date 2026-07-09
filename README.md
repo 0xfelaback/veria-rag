@@ -1,32 +1,32 @@
 # Veria - RAG Document Query System
 
-A production-ready Retrieval-Augmented Generation (RAG) system that enables intelligent querying of PDF documents using local LLMs and vector embeddings. Veria provides a FastAPI-based REST API for document ingestion and natural language querying.
+A production-ready Retrieval-Augmented Generation (RAG) system that enables intelligent querying of PDF, DOCX, and Markdown documents using local LLMs and vector embeddings. Veria provides a FastAPI-based REST API for document ingestion and natural language querying.
 
-## 📋 Project Summary
+## Project Summary
 
 Veria is an intelligent document processing and retrieval system that:
 
-- Ingests PDF documents through a simple upload API
-- Parses documents using MarkItDown for accurate text extraction
-- Generates embeddings using local models via Ollama
+- Ingests PDF, DOCX, and Markdown documents through upload APIs
+- Parses binary files using MarkItDown for accurate text extraction
+- Generates embeddings using local Ollama models
 - Stores embeddings in Elasticsearch for efficient similarity search
-- Enables natural language querying with context-aware responses
+- Enables natural language querying with context-aware, streaming responses
 
-The system is designed for privacy-conscious applications where documents and queries should remain local, leveraging Ollama for local inference and MinIO for scalable document storage.
+The system is designed for privacy-conscious applications where documents and queries remain local, leveraging Ollama for local inference and MinIO for scalable document storage.
 
-## ✨ Features
+## Features
 
-- **PDF Document Ingestion**: Upload and store PDF documents via REST API
-- **Intelligent Parsing**: Convert PDFs to markdown using MarkItDown for accurate text extraction
-- **Local Embeddings**: Generate vector embeddings using Ollama (no external API dependencies)
-- **Vector Search**: Elasticsearch-powered semantic search with configurable similarity thresholds
-- **Streaming Responses**: Real-time streaming of LLM responses for better user experience
-- **Document Metadata**: Rich metadata tracking including author, category, and parsing timestamps
-- **Chunking Strategy**: Configurable document chunking with overlap for better context preservation
-- **Comprehensive Logging**: Detailed logging with Loguru for debugging and monitoring
-- **Health Checks**: Built-in health check endpoint for monitoring
+- **PDF, DOCX, and Markdown Ingestion**: Upload and store documents via REST API
+- **Intelligent Parsing**: Convert PDFs and DOCX files to markdown using MarkItDown
+- **Local Embeddings**: Generate vector embeddings with Ollama
+- **Vector Search**: Elasticsearch-powered semantic search
+- **Streaming Responses**: Server-Sent Events (SSE) from the prompt endpoint
+- **Document Metadata**: Stores filename, author, category, and parsing timestamps
+- **Chunking Strategy**: Configurable chunking with overlap for better retrieval quality
+- **Comprehensive Logging**: Detailed runtime logging with Loguru
+- **Health Checks**: Built-in `/health` endpoint for monitoring
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 ┌─────────────┐
@@ -40,9 +40,10 @@ The system is designed for privacy-conscious applications where documents and qu
 ┌──────────────────┐                              ┌──────────────────┐
 │ DocumentService  │                              │  MinIO Storage   │
 │                  │                              │                  │
-│ - PDF Parsing    │◄────────────────────────────│ - PDF Storage    │
-│ - Embedding      │                              │ - Object Mgmt    │
-│ - Query Pipeline │                              └──────────────────┘
+│ - PDF / DOCX     │◄────────────────────────────│ - File Storage   │
+│   Parsing         │                              │ - Object Mgmt    │
+│ - Embedding      │                              └──────────────────┘
+│ - Query Pipeline │
 └────────┬─────────┘
          │
          ├─────────────────────────────────────────────────────┐
@@ -53,8 +54,8 @@ The system is designed for privacy-conscious applications where documents and qu
 │ Pipeline         │                              │                  │
 │                  │                              │ - Vector Store   │
 │ - Markdown Parser│─────────────────────────────►│ - Semantic Search│
-│ - Sentence Split │                              │ - Index Mgmt     │
-│ - Embed Model    │                              └──────────────────┘
+│ - Chunking       │                              │ - Index Mgmt     │
+│ - Embedding      │                              └──────────────────┘
 └────────┬─────────┘
          │
          ▼
@@ -66,11 +67,11 @@ The system is designed for privacy-conscious applications where documents and qu
 └──────────────────┘
 ```
 
-## 📦 Prerequisites
+## Prerequisites
 
 ### Required Software
 
-- **Python**: 3.11 or 3.12 (3.14 not recommended due to asyncio issues)
+- **Python**: 3.11 or 3.12
 - **Poetry**: For dependency management
 - **MinIO**: S3-compatible object storage (local or remote)
 - **Elasticsearch**: Vector database for embeddings storage
@@ -78,17 +79,17 @@ The system is designed for privacy-conscious applications where documents and qu
 
 ### Ollama Models
 
-Ensure you have the following models pulled in Ollama:
+The repository is configured to use these Ollama models:
 
-- Embedding model: `nomic-embed-text` or compatible
-- LLM model: `llama3` or compatible
+- Embedding model: `all-minilm:latest`
+- LLM model: `llama3.2:3b`
 
 ```bash
-ollama pull nomic-embed-text
-ollama pull llama3
+ollama pull all-minilm:latest
+ollama pull llama3.2:3b
 ```
 
-## 🚀 Installation
+## Installation
 
 ### 1. Clone the Repository
 
@@ -99,7 +100,7 @@ cd Veria
 
 ### 2. Install Dependencies
 
-Using Poetry (recommended):
+Using Poetry:
 
 ```bash
 poetry install
@@ -113,33 +114,33 @@ pip install -e .
 
 ### 3. Configure Environment Variables
 
-Create a `.env` file in the project root:
+Create a `.env` file in the project root and populate it with your runtime settings.
 
-```bash
-cp .env.example .env
-```
-
-Edit `.env` with your configuration:
+Example values:
 
 ```env
-# MinIO Configuration
 MINIO_ENDPOINT=localhost:9000
-MINIO_ACCESS_KEY=your_access_key
-MINIO_SECRET_KEY=your_secret_key
-MINIO_BUCKET_NAME=voice-agent-veria-context-documents
-
-# Elasticsearch Configuration
+MINIO_ACCESS_KEY=ROOTUSER
+MINIO_SECRET_KEY=kP3*qV9@jB6
+MINIO_BUCKET_NAME=voice-agent-veria-context-documents-pdf
+MINIO_BUCKET_NAME_MD=voice-agent-veria-context-documents-markdown
+MINIO_BUCKET_NAME_DOCX=voice-agent-veria-context-documents-docx
+MINIO_BUCKET_NAME_DOCX_MD=voice-agent-veria-context-documents-docx-md
+MINIO_BUCKET_NAME_PDF_MD=voice-agent-veria-context-documents-pdf-md
 ELASTIC_USERNAME=elastic
-ELASTIC_PASSWORD=your_password
+ELASTIC_PASSWORD=xL5Rh2495352wx2lhlCyXS9C
 ELASTIC_URL=http://localhost:9200
 ELASTIC_IGNORE_SSL_ERRORS=true
 ES_INDEX_NAME=veria-agent-index
 ES_CLUSTER_NAME=veria-agent-cluster
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_LLM_MODEL=llama3.2:3b
+OLLAMA_EMBEDDING_MODEL=all-minilm:latest
 ```
 
 ### 4. Start Required Services
 
-**MinIO** (if running locally):
+**MinIO** (local):
 
 ```bash
 docker run -d \
@@ -151,7 +152,7 @@ docker run -d \
   minio/minio server /data --console-address ":9001"
 ```
 
-**Elasticsearch** (if running locally):
+**Elasticsearch** (local):
 
 ```bash
 docker run -d \
@@ -167,40 +168,36 @@ docker run -d \
 
 ```bash
 # Install Ollama from https://ollama.ai
-# Start the Ollama service
 ollama serve
 ```
 
-## ⚙️ Configuration
+## Configuration
 
-### Document Chunking
+### Environment Configuration
 
-Configure chunking parameters in `src/Application/services/DocumentService.py`:
+Runtime settings are loaded from `.env` by `src/Infrastructure/dbcontext/context.py`.
 
-```python
-sentence_splitter = SentenceSplitter(
-    chunk_size=1024,        # Size of each chunk in characters
-    chunk_overlap=20,        # Overlap between chunks for context
-)
-```
+Required values include MinIO buckets, Elasticsearch connection settings, and Ollama model endpoints.
 
-### Elasticsearch Index
+### MinIO Buckets
 
-The system automatically creates the Elasticsearch index on first run. Configure index settings in `src/Infrastructure/elastic_search/index.py`.
+The application creates and uses these buckets on startup:
 
-### Logging
+- `MINIO_BUCKET_NAME`
+- `MINIO_BUCKET_NAME_MD`
+- `MINIO_BUCKET_NAME_DOCX`
+- `MINIO_BUCKET_NAME_DOCX_MD`
+- `MINIO_BUCKET_NAME_PDF_MD`
 
-Logs are stored in the `logs/` directory with timestamp-based filenames. Configure logging in `src/main.py`:
+Uploaded PDF and DOCX files are converted to markdown and saved into the corresponding markdown buckets.
 
-```python
-logger.add(
-    log_filename,
-    level="DEBUG",
-    format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level} | {message}",
-)
-```
+### Embeddings and LLM
 
-## 🎯 Usage
+- Embeddings are generated in `src/Infrastructure/embedding_model/index.py` using `OllamaEmbedding`.
+- LLM inference is configured in `src/Infrastructure/llm/index.py` using `Ollama` and a streaming response synthesizer.
+- Elasticsearch vector store initialization is handled in `src/Infrastructure/elastic_search/index.py`.
+
+## Usage
 
 ### Starting the Server
 
@@ -208,7 +205,7 @@ logger.add(
 uvicorn src.main:app --port 3002 --reload --loop asyncio
 ```
 
-The API will be available at `http://localhost:3002`
+The API will be available at `http://localhost:3002`.
 
 ### API Endpoints
 
@@ -217,6 +214,169 @@ The API will be available at `http://localhost:3002`
 ```bash
 curl http://localhost:3002/health
 ```
+
+Response:
+
+```json
+{ "status": "ok" }
+```
+
+#### Upload Markdown Document
+
+```bash
+curl -X POST http://localhost:3002/upload-md \
+  -F "file=@/path/to/document.md"
+```
+
+#### Upload PDF Document
+
+```bash
+curl -X POST http://localhost:3002/upload-pdf \
+  -F "file=@/path/to/document.pdf"
+```
+
+#### Upload DOCX Document
+
+```bash
+curl -X POST http://localhost:3002/upload-docx \
+  -F "file=@/path/to/document.docx"
+```
+
+#### Query Documents
+
+```bash
+curl -X POST http://localhost:3002/prompt \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What are the key points about financial regulations?"}'
+```
+
+The `/prompt` endpoint returns a streaming response via SSE.
+
+### Python Client Example
+
+```python
+import requests
+
+# Upload a document
+with open("document.pdf", "rb") as f:
+    response = requests.post(
+        "http://localhost:3002/upload-pdf",
+        files={"file": f}
+    )
+    print(response.json())
+
+# Query the documents
+response = requests.post(
+    "http://localhost:3002/prompt",
+    json={"query": "Summarize the document"}
+)
+
+for line in response.iter_lines():
+    if line:
+        print(line.decode("utf-8"))
+```
+
+## Request Flow
+
+### Upload Flow
+
+1. **File Upload** (`POST /upload-pdf`, `/upload-docx`, `/upload-md`)
+   - Validates file type
+   - Stores raw file in MinIO via `DocumentService.store_to_minio()`
+
+2. **Document Parsing** (`DocumentService.parse_document()`)
+   - Retrieves the file from MinIO
+   - Converts PDF or DOCX to markdown using MarkItDown
+   - Builds a LlamaIndex document with metadata
+
+3. **Embedding Generation**
+   - Runs the ingestion pipeline: Markdown parser → Sentence splitter → Ollama embedding model
+   - Stores embeddings in Elasticsearch
+
+### Query Flow
+
+1. **Query Submission** (`POST /prompt`)
+   - Receives natural language query
+   - Retrieves relevant nodes from Elasticsearch
+
+2. **Vector Search**
+   - Uses a retriever to fetch top-k matching document chunks
+
+3. **Response Generation**
+   - Feeds retrieved context into Ollama LLM
+   - Streams the answer back to the client
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+**Issue**: "File already exists" when uploading
+
+- The service prevents duplicate uploads by filename.
+- Delete the existing object from MinIO or upload a file with a different name.
+
+**Issue**: Elasticsearch connection failure
+
+- Confirm Elasticsearch is running and reachable.
+- Verify `ELASTIC_URL`, `ELASTIC_USERNAME`, and `ELASTIC_PASSWORD` in `.env`.
+
+**Issue**: Ollama model not found
+
+- Ensure the required Ollama models are pulled locally:
+
+```bash
+ollama pull all-minilm:latest
+ollama pull llama3.2:3b
+```
+
+**Issue**: asyncio errors with Python 3.14
+
+- Use Python 3.11 or 3.12 as recommended in `run.md`.
+
+### Debug Mode
+
+Check the `logs/` directory for detailed execution logs from `src/main.py`.
+
+## Contributing
+
+Contributions are welcome! Please follow these guidelines:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+### Development Setup
+
+```bash
+poetry install --with dev
+poetry run pytest
+poetry run black .
+poetry run isort .
+```
+
+## Security Considerations
+
+- Store sensitive credentials in environment variables and keep `.env` out of version control
+- Use strong passwords for MinIO and Elasticsearch
+- Enable SSL/TLS for production
+- Add authentication/authorization to API endpoints for production use
+- Keep dependencies updated
+
+## Roadmap
+
+- [ ] Improve query context handling
+- [ ] Add authenticated API access
+- [ ] Add end-to-end tests for document ingestion
+
+## Additional Resources
+
+- [FastAPI Documentation](https://fastapi.tiangolo.com/)
+- [LlamaIndex Documentation](https://docs.llamaindex.ai/)
+- [Ollama Documentation](https://ollama.ai/docs)
+- [Elasticsearch Documentation](https://www.elastic.co/guide/en/elasticsearch/reference/current/index.html)
+- [MinIO Documentation](https://min.io/docs/minio/linux/index.html)
 
 Response:
 
@@ -283,7 +443,7 @@ for line in response.iter_lines():
         print(line.decode("utf-8"))
 ```
 
-## 📊 Request Flow
+## Request Flow
 
 ### Upload PDF Flow
 
@@ -317,7 +477,7 @@ for line in response.iter_lines():
    - Pass retrieved context to LLM via Ollama
    - Stream response back to client
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
@@ -341,7 +501,7 @@ for line in response.iter_lines():
 
 Enable detailed logging by setting the log level to DEBUG in `src/main.py`. Check the `logs/` directory for detailed execution logs.
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please follow these guidelines:
 
@@ -365,7 +525,7 @@ poetry run black .
 poetry run isort .
 ```
 
-## 🔐 Security Considerations
+## Security Considerations
 
 - Store sensitive credentials (MinIO, Elasticsearch) in environment variables (.env) and add to `.gitignore`
 - Use strong passwords for all services
@@ -373,13 +533,13 @@ poetry run isort .
 - Regularly update dependencies for security patches
 - Consider adding authentication/authorization to API endpoints
 
-## 🗺️ Roadmap
+## Roadmap
 
-- [ ] Fix the broken streaming logic
-- [ ] Integrate a pipecat voice agent module with the RAG pipeline
+- [x] Fix the broken streaming logic
+- [x] Integrate a pipecat voice agent module with the RAG pipeline
 - [ ] Expose the voice agent via a websocket
 
-## 📚 Additional Resources
+## Additional Resources
 
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)
 - [LlamaIndex Documentation](https://docs.llamaindex.ai/)

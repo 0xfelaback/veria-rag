@@ -1,5 +1,3 @@
-# technical papers
-
 from contextlib import asynccontextmanager
 import datetime
 from io import BytesIO
@@ -25,12 +23,14 @@ logger.add(
 async def lifespan(app: FastAPI):
     try:
         logger.info(
-            f"Checking buckets: {settings.MINIO_BUCKET_NAME}, {settings.MINIO_BUCKET_NAME_MD}, {settings.MINIO_BUCKET_NAME_DOCX}"
+            f"Checking buckets: {settings.MINIO_BUCKET_NAME}, {settings.MINIO_BUCKET_NAME_MD}, {settings.MINIO_BUCKET_NAME_DOCX}, {settings.MINIO_BUCKET_NAME_DOCX_MD}, {settings.MINIO_BUCKET_NAME_PDF_MD}"
         )
         for bucket_name in [
             settings.MINIO_BUCKET_NAME,
             settings.MINIO_BUCKET_NAME_MD,
             settings.MINIO_BUCKET_NAME_DOCX,
+            settings.MINIO_BUCKET_NAME_DOCX_MD,
+            settings.MINIO_BUCKET_NAME_PDF_MD,
         ]:
             if not minio_client.bucket_exists(bucket_name):
                 logger.info(f"Creating bucket: {bucket_name}")
@@ -64,7 +64,8 @@ async def upload_md(file: UploadFile = File(...)):
     document_service = DocumentService()
     if file.content_type != "text/markdown":
         logger.warning(f"Invalid file type: {file.content_type}")
-        return {"error": "Only markdown document files are allowed in this endpoint"}
+        error = {"error": "Only markdown document files are allowed in this endpoint"}
+        raise HTTPException(status_code=400, detail=str(error))
     logger.info(f"Reading file content: {file.filename}")
     file_content = await file.read()
     file_size = len(file_content)
@@ -106,7 +107,8 @@ async def upload_pdf(file: UploadFile = File(...)):
     document_service = DocumentService()
     if file.content_type != "application/pdf":
         logger.warning(f"Invalid file type: {file.content_type}")
-        return {"error": "Only PDF files are allowed in this endpoint"}
+        error = {"error": "Only PDF files are allowed in this endpoint"}
+        raise HTTPException(status_code=400, detail=str(error))
 
     logger.info(f"Reading file content: {file.filename}")
     file_content = await file.read()
@@ -154,7 +156,8 @@ async def upload_docx(file: UploadFile = File(...)):
         ".docx"
     ):
         logger.warning(f"Invalid file type: {file.content_type}")
-        return {"error": "Only DOCX files are allowed in this endpoint"}
+        error = {"error": "Only DOCX files are allowed in this endpoint"}
+        raise HTTPException(status_code=400, detail=str(error))
 
     logger.info(f"Reading file content: {filename}")
     file_content = await file.read()

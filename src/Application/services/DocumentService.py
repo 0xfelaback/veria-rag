@@ -50,6 +50,33 @@ class DocumentService:
     def __init__(self):
         pass
 
+    def _save_markdown_to_minio(self, markdown_text: str, filename: str | None, bucket_name: str):
+        """Save markdown content to specified MinIO bucket."""
+        try:
+            object_name = filename if filename is not None else "document"
+            if object_name.endswith('.pdf'):
+                object_name = object_name[:-4] + '_pdf.md'
+            elif object_name.endswith('.docx'):
+                object_name = object_name[:-5] + '_docx.md'
+            elif not object_name.endswith('.md'):
+                object_name = object_name + '.md'
+                
+            markdown_bytes = markdown_text.encode('utf-8')
+            markdown_stream = BytesIO(markdown_bytes)
+            
+            logger.info(f"Saving markdown to MinIO bucket: {bucket_name}, object: {object_name}")
+            minio_client.put_object(
+                bucket_name=bucket_name,
+                object_name=object_name,
+                data=markdown_stream,
+                length=len(markdown_bytes),
+                content_type='text/markdown',
+            )
+            logger.info(f"Markdown saved successfully: {object_name}")
+        except S3Error as err:
+            logger.error(f"Failed to save markdown to MinIO: {filename}, error: {err}")
+            raise
+
     def store_to_minio(
         self,
         file_size: int,
@@ -118,6 +145,7 @@ class DocumentService:
                 pdf_buffer = io.BytesIO(pdf_bytes)
                 result = md.convert(pdf_buffer, file_extension=".pdf")
                 markdown_text = result.markdown
+                self._save_markdown_to_minio(markdown_text, filename, settings.MINIO_BUCKET_NAME_PDF_MD)
             elif file_type == FileType.MD:
                 markdown_text = response.read().decode("utf-8", errors="ignore")
             elif file_type == FileType.DOCX:
@@ -125,6 +153,7 @@ class DocumentService:
                 docx_buffer = io.BytesIO(docx_bytes)
                 result = md.convert(docx_buffer, file_extension=".docx")
                 markdown_text = result.markdown
+                self._save_markdown_to_minio(markdown_text, filename, settings.MINIO_BUCKET_NAME_DOCX_MD)
             doc = Document(
                 text=markdown_text,
                 metadata={
