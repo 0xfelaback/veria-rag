@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     OLLAMA_BASE_URL: str = Field(default=...)
     OLLAMA_LLM_MODEL: str = Field(default=...)
     OLLAMA_EMBEDDING_MODEL: str = Field(default=...)
+    OLLAMA_VLM_MODEL: str = Field(default=...)
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"

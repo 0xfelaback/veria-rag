@@ -11,6 +11,7 @@ from src.Infrastructure.llm.index import response_synthesizer
 from src.Infrastructure.elastic_search.index import (
     index,
 )
+from openai import OpenAI
 from markitdown import MarkItDown
 from loguru import logger
 from llama_index.core import Document
@@ -19,7 +20,18 @@ from llama_index.core.ingestion import IngestionPipeline
 from llama_index.core.prompts import PromptTemplate
 from src.Infrastructure.llm.index import local_llm, prompt_text
 
-md = MarkItDown()
+ollama_api_url = settings.OLLAMA_BASE_URL
+if not ollama_api_url.endswith("/v1") and not ollama_api_url.endswith("/v1/"):
+    ollama_api_url = f"{ollama_api_url.rstrip('/')}/v1"
+
+local_client = OpenAI(base_url=ollama_api_url, api_key="xxxx")
+
+md = MarkItDown(
+    enable_plugins=True,
+    llm_client=local_client,
+    llm_model=settings.OLLAMA_VLM_MODEL,
+    llm_prompt="Extract and transcribe all text from this page accurately.",
+)
 md_parser = MarkdownNodeParser()
 sentence_splitter = SentenceSplitter(
     chunk_size=1024,

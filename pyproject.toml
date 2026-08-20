@@ -20,6 +20,7 @@ dependencies = [
     "llama-index-core (>=0.14.23,<0.15.0)",
     "llama-index-vector-stores-elasticsearch (>=0.6.0,<0.7.0)",
     "pypdf (>=6.14.2,<7.0.0)",
+    "markitdown-ocr (>=0.1.0,<0.2.0)",
 ]
 
 

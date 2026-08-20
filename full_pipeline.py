@@ -138,6 +138,12 @@ class PipelineTimingProcessor(FrameProcessor):
             self.vad_stop_time = current_time
             loggerr.debug("[TIMING] VAD detected user stopped speaking")
 
+        if isinstance(frame, UserStartedSpeakingFrame):
+            self.llm_start_time = None
+            self.llm_first_token_time = None
+            self.llm_complete_time = None
+            self.llm_text_frame_count = 0
+
         if isinstance(frame, UserStoppedSpeakingFrame):
             self.user_stop_detected_time = current_time
             self.user_stop_to_bot_start_logged = False
@@ -227,7 +233,7 @@ class PipelineTimingProcessor(FrameProcessor):
                 ) * 1000
                 loggerr.info(
                     f"[TIMING] LLM first token to bot speaking: {text_to_audio:.2f}ms"
-                )
+                )  # fix this.
             if self.transcription_complete_time:
                 end_to_end = (
                     self.bot_started_speaking_time - self.transcription_complete_time
@@ -525,10 +531,9 @@ async def main():
     )
     vad_params = SpeechControlParamsFrame(
         vad_params=VADParams(
-            confidence=0.5,
-            # confidence=0.8,  # for noisy environments
+            confidence=0.9,
             start_secs=0.1,
-            min_volume=0.5,
+            min_volume=0.9,
             stop_secs=1.8,
         )
     )

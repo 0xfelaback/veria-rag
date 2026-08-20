@@ -12,10 +12,12 @@ from loguru import logger
 
 current_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 log_filename = f"logs/{current_time}-log-veria.log"
+logger.remove()
 logger.add(
     log_filename,
     level="DEBUG",
     format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level} | {message}",
+    colorize=False,
 )
 
 
